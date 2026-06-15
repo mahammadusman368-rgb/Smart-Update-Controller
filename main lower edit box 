@@ -1,7 +1,7 @@
 -- Smart-auto-update Creator: Mohammad Usman
 -- Language: AndroLua+ (Lua)
 -- Target: Jieshuo Screen Reader Auto-Update System Injector
--- Version: 4.7 (Fixed Dialog Token Error)
+-- Version: 4.8 (Fully Fixed - No setView Errors)
 
 require "import"
 import "android.widget.*"
@@ -28,8 +28,8 @@ local cipherKey = 85
 
 -- Safe Dialog Show Function
 local function showDialogSafe(dialog)
-    if service then
-        dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY)
+    if service and dialog then
+        pcall(function() dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY) end)
     end
     pcall(function() dialog.show() end)
 end
@@ -41,7 +41,7 @@ local function isInternetConnected()
     return activeNetwork ~= nil and activeNetwork.isConnected()
 end
 
-local layout = {
+local mainLayout = {
   ScrollView,
   layout_width = "fill",
   layout_height = "fill",
@@ -92,11 +92,8 @@ local layout = {
   }
 }
 
-local mainDialog = nil
-mainDialog = AlertDialog.Builder(ctx).setView(loadlayout(layout)).create()
+local mainDialog = AlertDialog.Builder(ctx).setView(loadlayout(mainLayout)).create()
 showDialogSafe(mainDialog)
-
-mainDialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
 mainDialog.setCancelable(false)
 
 checkTargetType.setOnCheckedChangeListener{
@@ -171,80 +168,26 @@ end
 
 btnAboutSupport.setOnClickListener{
   onClick = function(v)
-    local supportLayout = {
-      LinearLayout,
-      orientation = "vertical",
-      layout_width = "fill",
-      layout_height = "wrap",
-      padding = "20dp",
-      {
-        TextView,
-        text = "Smart-auto-update Creator: Mohammad Usman",
-        textColor = 0xFF009688,
-        textSize = "18sp",
-        gravity = "center",
-        layout_width = "fill",
-        layout_height = "wrap",
-      },
-      {
-        TextView,
-        text = "WhatsApp: +" .. whatsappNumber,
-        textColor = 0xFF333333,
-        textSize = "15sp",
-        gravity = "center",
-        layout_width = "fill",
-        layout_height = "wrap",
-        layout_marginTop = "15dp",
-      },
-      {
-        Button, id = "btnCopyWhatsApp", text = "Copy WhatsApp Number", layout_width = "fill", layout_height = "wrap", layout_marginTop = "15dp",
-      },
-      {
-        Button, id = "btnContactWhatsApp", text = "Contact WhatsApp", backgroundColor = 0xFF25D366, textColor = 0xFFFFFFFF, layout_width = "fill", layout_height = "wrap", layout_marginTop = "10dp",
-      },
-      {
-        Button, id = "btnSubBack", text = "Go Back", layout_width = "fill", layout_height = "wrap", layout_marginTop = "15dp",
-      },
-    }
-    
-    local supportDialog = AlertDialog.Builder(ctx).setView(supportLayout).create()
-    showDialogSafe(supportDialog)
-    supportDialog.setCancelable(false)
-    
-    btnCopyWhatsApp.setOnClickListener{
-      onClick = function(view)
-        if Build.VERSION.SDK_INT >= 11 then
-          local clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE)
-          local clip = ClipData.newPlainText("WhatsApp Number", whatsappNumber)
-          clipboard.setPrimaryClip(clip)
-        else
-          local clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE)
-          clipboard.setText(whatsappNumber)
-        end
-        Toast.makeText(ctx, "WhatsApp number clipboard mein copy ho gaya hai!", 0).show()
-      end
-    }
-    
-    btnContactWhatsApp.setOnClickListener{
-      onClick = function(view)
-        local success, err = pcall(function()
-          local url = "https://api.whatsapp.com/send?phone=" .. whatsappNumber
-          local intent = Intent(Intent.ACTION_VIEW)
-          intent.setData(Uri.parse(url))
+    -- Simple TextView dialog instead of complex layout
+    local supportDialog = AlertDialog.Builder(ctx)
+      .setTitle("About & Support")
+      .setMessage("Smart-auto-update Creator\nMohammad Usman\n\nWhatsApp: +" .. whatsappNumber .. "\n\nFor help, bugs, or features request,\ncontact on WhatsApp.")
+      .setPositiveButton("Copy Number", function()
+        local clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE)
+        local clip = ClipData.newPlainText("WhatsApp Number", whatsappNumber)
+        clipboard.setPrimaryClip(clip)
+        Toast.makeText(ctx, "Number copied!", 0).show()
+      end)
+      .setNeutralButton("WhatsApp", function()
+        pcall(function()
+          local intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://api.whatsapp.com/send?phone=" .. whatsappNumber))
           intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
           ctx.startActivity(intent)
         end)
-        if not success then
-          Toast.makeText(ctx, "WhatsApp open karne mein masla hua!", 1).show()
-        end
-      end
-    }
-    
-    btnSubBack.setOnClickListener{
-      onClick = function(view)
-        supportDialog.dismiss()
-      end
-    }
+      end)
+      .setNegativeButton("Close", nil)
+      .create()
+    showDialogSafe(supportDialog)
   end
 }
 
@@ -294,7 +237,7 @@ btnInject.setOnClickListener{
       end
     end
     
-    -- Fixed rawTemplate with proper dialog handling
+    -- Fixed rawTemplate - Removed complex layouts, using simple message dialogs only
     local rawTemplate = [[require "import"
 import "com.androlua.Http"
 import "android.widget.Toast"
@@ -304,13 +247,10 @@ import "android.view.WindowManager"
 import "android.os.Handler"
 import "android.os.Looper"
 import "java.io.File"
-import "android.net.ConnectivityManager"
-import "android.net.NetworkInfo"
 
 local updateURL = "__VERSION_URL__"
 local downloadURL = "__DOWNLOAD_URL__"
 local defaultVersion = "__DEFAULT_VERSION__"
-local mainPath = "__CURRENT_DIR__/main.lua"
 local oldPath = "__CURRENT_DIR__/old_main.lua"
 local versionPath = "__CURRENT_DIR__/version.txt"
 local secretKey = ]] .. cipherKey .. [[
@@ -318,16 +258,10 @@ local secretKey = ]] .. cipherKey .. [[
 local currentCtx = service or activity
 
 local function showDialogSafe(dialog)
-    if service then
-        dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY)
+    if service and dialog then
+        pcall(function() dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY) end)
     end
     pcall(function() dialog.show() end)
-end
-
-local function isInternetConnected()
-    local cm = currentCtx.getSystemService(import "android.content.Context".CONNECTIVITY_SERVICE)
-    local activeNetwork = cm.getActiveNetworkInfo()
-    return activeNetwork ~= nil and activeNetwork.isConnected()
 end
 
 local function xcipDecode(hexStr)
@@ -342,6 +276,7 @@ local function xcipDecode(hexStr)
     return table.concat(t)
 end
 
+-- Load old code if exists
 if File(oldPath).exists() then 
     local f = io.open(oldPath, "r")
     if f then
@@ -350,15 +285,13 @@ if File(oldPath).exists() then
         if content:find("^xcip:") then
             local rawCode = xcipDecode(content:sub(6))
             local chunkExecuted = false
-            local compiledChunk, err = load(function()
+            local compiledChunk = load(function()
                 if chunkExecuted then return nil end
                 chunkExecuted = true
                 return rawCode
             end, "=old_main.lua", "bt", _G)
-            
             if compiledChunk then
-                local success, runtimeErr = pcall(compiledChunk)
-                if not success then pcall(dofile, oldPath) end
+                pcall(compiledChunk)
             else
                 pcall(dofile, oldPath)
             end
@@ -368,9 +301,8 @@ if File(oldPath).exists() then
     end
 end
 
+-- Check for updates after delay
 Handler(Looper.getMainLooper()).postDelayed(Runnable{run=function()
-    if not isInternetConnected() then return end
-    
     Http.get(updateURL, function(code, response)
         if code == 200 and response then
             local serverFullContent = tostring(response)
@@ -386,21 +318,21 @@ Handler(Looper.getMainLooper()).postDelayed(Runnable{run=function()
             end
             
             local f = io.open(versionPath, "r")
-            local localFullContent = f and f:read("*a") or defaultVersion
+            local localVersion = f and f:read("*a"):match("([^\r\n]+)") or defaultVersion
             if f then f:close() end
-            local localVersion = localFullContent:match("([^\r\n]+)") or defaultVersion
             localVersion = localVersion:gsub("^%s*(.-)%s*$", "%1")
             
             if onlineVersion ~= localVersion then
-                local updateAlertDlg = AlertDialog.Builder(currentCtx)
-                updateAlertDlg.setTitle("Update Available!")
-                local dialogMsg = "Server Version: " .. onlineVersion .. "\nYour Version: " .. localVersion
+                local msg = "Server Version: " .. onlineVersion .. "\nYour Version: " .. localVersion
                 if updateMessage ~= "" then
-                    dialogMsg = dialogMsg .. "\n\n[What's New]:\n" .. updateMessage
+                    msg = msg .. "\n\nWhat's New:\n" .. updateMessage
                 end
-                updateAlertDlg.setMessage(dialogMsg)
-                updateAlertDlg.setCancelable(false)
-                updateAlertDlg.setPositiveButton("Update", function(dialogInterface, itemIndex)
+                
+                local builder = AlertDialog.Builder(currentCtx)
+                builder.setTitle("Update Available!")
+                builder.setMessage(msg)
+                builder.setCancelable(false)
+                builder.setPositiveButton("Update", function()
                     local progressDlg = ProgressDialog(currentCtx)
                     progressDlg.setTitle("Updating...")
                     progressDlg.setMessage("Downloading...")
@@ -408,14 +340,8 @@ Handler(Looper.getMainLooper()).postDelayed(Runnable{run=function()
                     progressDlg.setCancelable(false)
                     showDialogSafe(progressDlg)
                     
-                    progressDlg.setProgress(30)
-                    
                     Http.get(downloadURL, function(c, content)
-                        progressDlg.setProgress(70)
-                        
                         if c == 200 and content then
-                            progressDlg.setProgress(100)
-                            
                             local serverCode = tostring(content)
                             local encryptedContent = serverCode
                             
@@ -437,31 +363,18 @@ Handler(Looper.getMainLooper()).postDelayed(Runnable{run=function()
                             pcall(function() progressDlg.dismiss() end)
                             
                             local successDlg = AlertDialog.Builder(currentCtx)
-                            successDlg.setTitle("Status")
-                            successDlg.setMessage("Update Successful! Please restart the extension.")
+                            successDlg.setTitle("Success")
+                            successDlg.setMessage("Update completed! Please restart the extension.")
                             successDlg.setPositiveButton("OK", nil)
-                            local sd2 = successDlg.create()
-                            showDialogSafe(sd2)
+                            showDialogSafe(successDlg.create())
                         else
                             pcall(function() progressDlg.dismiss() end)
-                            Toast.makeText(currentCtx, "Download failed! Please try again.", 1).show()
+                            Toast.makeText(currentCtx, "Download failed!", 1).show()
                         end
                     end)
                 end)
-                updateAlertDlg.setNegativeButton("Later", nil)
-                local d1 = updateAlertDlg.create()
-                showDialogSafe(d1)
-                
-            elseif serverFullContent:gsub("^%s*(.-)%s*$", "%1") ~= localFullContent:gsub("^%s*(.-)%s*$", "%1") and updateMessage ~= "" then
-                local msgDialog = AlertDialog.Builder(currentCtx)
-                msgDialog.setTitle("Important Announcement")
-                msgDialog.setMessage(updateMessage)
-                msgDialog.setPositiveButton("OK", function()
-                    local vf = io.open(versionPath, "w")
-                    if vf then vf:write(serverFullContent) vf:close() end
-                end)
-                local d3 = msgDialog.create()
-                showDialogSafe(d3)
+                builder.setNegativeButton("Later", nil)
+                showDialogSafe(builder.create())
             end
         end
     end)
@@ -497,10 +410,7 @@ local loaderChunk, err = load(function()
 end, "=main.lua", "bt", _G)
 
 if loaderChunk then
-    local ok, rErr = pcall(loaderChunk)
-    if not ok then print("Execution error: " .. tostring(rErr)) end
-else
-    print("Loader structure error: " .. tostring(err))
+    pcall(loaderChunk)
 end]]
 
     local f = io.open(targetMainFile, "w")
@@ -523,10 +433,9 @@ end]]
     
     local success = AlertDialog.Builder(ctx)
     success.setTitle("Injection Successful!")
-    success.setMessage("Mubarak ho! " .. selectedFolder .. " mein Safe Dynamic Cipher System kamyabi ke sath inject ho gaya hai.\n\nAb isme auto-update ka system lag chuka hai.")
+    success.setMessage("Mubarak ho! " .. selectedFolder .. " mein auto-update system successfully inject ho gaya hai.")
     success.setPositiveButton("OK", nil)
-    local sd = success.create()
-    showDialogSafe(sd)
+    showDialogSafe(success.create())
   end
 }
 
